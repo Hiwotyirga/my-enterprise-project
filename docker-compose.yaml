@@ -1,0 +1,64 @@
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  # 1. PostgreSQL Database (Primary database for app & Kratos)
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: enterprise_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # 2. Redis Stack (Caching, Sessions, & RedisInsight UI)
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis_stack
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+  # 3. Garage (Lightweight, S3-compatible object storage replacement)
+  s3storage:
+    image: dxflrs/garage:v1.0.1
+    container_name: s3_storage
+    ports:
+      - "3900:3900" # S3 API port
+    volumes:
+      - s3_data:/data
+    networks:
+      - app-network
+
+  # 4. Ory Kratos (Identity and Authentication Engine)
+  kratos:
+    image: oryd/kratos:v1.1.0
+    container_name: kratos_auth
+    depends_on:
+      - postgres
+    ports:
+      - "4433:4433"
+      - "4434:4434"
+    environment:
+      - DSN=postgres://root:secretpassword@postgres_db:5432/enterprise_db?sslmode=disable
+    command: serve -c /etc/config/kratos.yml --dev
+    volumes:
+     - ./src/kratos:/etc/config
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  redis_data: 
+  s3_data:
